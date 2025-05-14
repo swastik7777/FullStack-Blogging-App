@@ -1,3 +1,4 @@
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -14,10 +15,9 @@ spec:
     spec:
       containers:
         - name: bloggingapp
-        image: swastik2929/blogger-app:22
+          image: swastik2929/blogger-app:22
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
       imagePullSecrets:
-        - name: regcred # Reference to the Docker registry secret
-
+        - name: regcred
