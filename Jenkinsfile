@@ -1,29 +1,134 @@
-pipeline { 
-    agent any
-    
+pipeline {
+    agent any 
+
     tools {
-        maven 'maven3'
-        jdk 'jdk17'
+        jdk "jdk17"
+        maven "maven3"
+    }
+
+    environment {
+        Docker_Repo = credentials('dockerCred')
     }
 
     stages {
-        
-        stage('Compile') {
+        stage("Git Checkout") {
             steps {
-            sh  "mvn compile"
+                git branch: 'main', credentialsId: 'gitCred', url: 'https://github.com/swastik7777/FullStack-Blogging-App.git'
             }
         }
-        
-        stage('Test') {
+
+        stage("Code Compile") {
+            steps {
+                sh "mvn compile"
+            }
+        }
+
+        stage("Code Test") {
             steps {
                 sh "mvn test"
             }
         }
-        
-        stage('Package') {
+
+        stage("Trivy FS Scan") {
+            steps {
+                sh 'trivy fs --format table -o fs.html .'
+            }
+        }
+
+        stage("SonarQube Analysis") {
+            steps {
+                script {
+                    env.SCANNER_HOME = tool "sonar-scanner"
+                }
+                withSonarQubeEnv("sonarqube") {
+                    sh """
+                        ${SCANNER_HOME}/bin/sonar-scanner \
+                        -Dsonar.projectName=blogging-app \
+                        -Dsonar.projectKey=blogging-app \
+                        -Dsonar.java.binaries=target
+                    """
+                }
+            }
+        }
+
+        stage("Build") {
             steps {
                 sh "mvn package"
             }
+        }
+
+        stage("Publish Artifact") {
+            steps {
+                withMaven(globalMavenSettingsConfig: 'maven-setting', jdk: 'jdk17', maven: 'maven3', traceability: true) {
+                    sh "mvn deploy"
+                }
+            }
+        }
+
+        stage("Docker Build & Tag") {
+            steps {
+                script {
+                    withDockerRegistry([credentialsId: 'dockerCred']) {
+                        sh "docker build -t swastik2929/blogger-app:${BUILD_NUMBER} ."
+                    }
+                }
+            }
+        }
+
+        stage("Trivy Image Scan") {
+            steps {
+                sh "trivy image --format table -o blogger-app-${BUILD_NUMBER}.html swastik2929/blogger-app:${BUILD_NUMBER}"
+            }
+        }
+
+        stage("Docker Push Image") {
+            steps {
+                script {
+                    withDockerRegistry([credentialsId: 'dockerCred']) {
+                        sh "docker push swastik2929/blogger-app:${BUILD_NUMBER}"
+                    }
+                }
+            }
+        }
+
+        stage('Update Deployment File') {
+    environment {
+        GIT_REPO_NAME = 'FullStack-Blogging-App'
+        GIT_USER_NAME = 'swastik7777'
+    }
+    steps {
+        withCredentials([string(credentialsId: 'gitToken', variable: 'GH_TOKEN')]) {
+            dir("k8s") {
+                sh '''
+                git config user.email "swastikgomase.sae.comp@gmail.com"
+                git config user.name "swastik7777"
+
+                imageTag=swastik2929/blogger-app:$BUILD_NUMBER
+
+                awk -v imageTag="${imageTag}" '/image:/ {$0 = "          image: " imageTag} {print}' deployment-service.yaml > temp.yaml && mv temp.yaml deployment-service.yaml
+
+                echo "Updating deployment-service.yaml with image tag: $imageTag"
+
+                git add deployment-service.yaml
+                git commit -m "Update deployment image to version $BUILD_NUMBER"
+                git push https://${GH_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
+                '''
+            }
+        }
+    }
+}
+
+}
+
+    post {
+        always {
+            echo "Pipeline completed. Cleaning up..."
+        }
+        success {
+            echo "Pipeline executed successfully!"
+        }
+        failure {
+            echo "Pipeline failed. Check above logs."
         }
     }
 }
