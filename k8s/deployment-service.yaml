@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: bloggingapp
-          image: swastik2929/blogger-app:111
+          image: swastik2929/blogger-app:112
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
