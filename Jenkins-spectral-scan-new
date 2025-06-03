@@ -1,0 +1,135 @@
+pipeline {
+    agent any
+    tools {
+        jdk 'jdk17'
+        maven 'maven3'
+    }
+    environment {
+        SPECTRAL_DSN = credentials('spectral-dsn')
+        Docker_Repo = credentials('dockerCred')
+        ISSUE_THRESHOLD = '200'
+    }
+    stages {
+        stage('Git Checkout') {
+            steps {
+                git branch: 'main', credentialsId: 'github-token', url: 'https://github.com/swastik7777/FullStack-Blogging-App.git'
+            }
+        }
+
+        stage('Code Compile') {
+            steps {
+                sh 'mvn compile'
+            }
+        }
+
+        stage('Code Test') {
+            steps {
+                sh 'mvn test'
+            }
+        }
+
+        stage('Configure Spectral Output') {
+    steps {
+        sh '''
+            mkdir -p .spectral
+            cat <<EOF > .spectral/spectral.yaml
+---
+extends: remote
+reporter:
+  outputs:
+    stylish:
+      json: output.json
+EOF
+        '''
+    }
+}
+
+stage('Run Spectral Scan') {
+    steps {
+        sh "$HOME/.spectral/spectral scan --ok --engines secrets,iac,oss --include-tags base,audit3,iac"
+        sh "pwd"
+        script {
+            def output = readFile('output.json')
+
+            // Regex to extract match_count value from the JSON text
+            def matcher = output =~ /"match_count"\s*:\s*(\d+)/
+            def matchCount = matcher.find() ? matcher.group(1).toInteger() : 0
+
+            echo "🔍 Spectral Matches Found: ${matchCount}"
+            def threshold = env.ISSUE_THRESHOLD.toInteger()
+
+            if (matchCount > threshold) {
+                error "Match count (${matchCount}) exceeds the threshold (${threshold}). Aborting pipeline."
+            }
+        }
+    }
+}
+
+        stage('Build') {
+            steps {
+                sh 'mvn package'
+            }
+        }
+
+        stage('Docker Build & Tag') {
+            steps {
+                script {
+                    withDockerRegistry([credentialsId: 'dockerCred']) {
+                        sh "docker build -t swastik2929/blogger-app:${env.BUILD_NUMBER} ."
+                    }
+                }
+            }
+        }
+
+        stage('Trivy Image Scan') {
+            steps {
+                sh "trivy image --format table -o blogger-app-${env.BUILD_NUMBER}.html swastik2929/blogger-app:${env.BUILD_NUMBER}"
+            }
+        }
+
+        stage('Docker Push Image') {
+            steps {
+                script {
+                    withDockerRegistry([credentialsId: 'dockerCred']) {
+                        sh "docker push swastik2929/blogger-app:${env.BUILD_NUMBER}"
+                    }
+                }
+            }
+        }
+
+        stage('Update Deployment File') {
+            environment {
+                GIT_REPO_NAME = 'FullStack-Blogging-App'
+                GIT_USER_NAME = 'swastik7777'
+            }
+            steps {
+                withCredentials([string(credentialsId: 'github-token', variable: 'GH_TOKEN')]) {
+                    dir('k8s') {
+                        sh '''
+                            git config user.email "swastikgomase.sae.comp@gmail.com"
+                            git config user.name "swastik7777"
+                            imageTag=swastik2929/blogger-app:$BUILD_NUMBER
+                            awk -v imageTag="${imageTag}" '/image:/ {$0 = "          image: " imageTag} {print}' deployment-service.yaml > temp.yaml && mv temp.yaml deployment-service.yaml
+                            echo "Updating deployment-service.yaml with image tag: $imageTag"
+                            git add deployment-service.yaml
+                            git commit -m "Update deployment image to version $BUILD_NUMBER"
+                            git push https://${GH_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
+                        '''
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo 'Pipeline completed. Cleaning up...'
+        }
+        success {
+            echo 'Pipeline executed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed. Check above logs.'
+        }
+    }
+}
