@@ -9,6 +9,7 @@ on:
 env:
   GIT_REPO_NAME: FullStack-Blogging-App
   GIT_USER_NAME: swastik7777
+  token: ${{ secrets.GITHUB_TOKEN }}
   SONAR_PROJECT_KEY: blogging-app
   SONAR_PROJECT_NAME: blogging-app
   DOCKER_IMAGE: swastik2929/blogger-app
