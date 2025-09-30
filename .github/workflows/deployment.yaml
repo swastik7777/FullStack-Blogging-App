@@ -65,7 +65,7 @@ jobs:
       - name: Publish Artifact
         run: mvn deploy -s .mvn/settings.xml
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN-1: ${{ secrets.MY_GIT_TOKEN }}
 
       # Docker Build
       - name: Log in to DockerHub
