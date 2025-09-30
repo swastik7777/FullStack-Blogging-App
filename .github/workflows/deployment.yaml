@@ -51,7 +51,7 @@ jobs:
              -Dsonar.projectKey=blogging-app \
              -Dsonar.projectName=blogging-app
         env:
-          SONAR_TOKEN_URL: ${{ secrets.SONAR_HOST_URL }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
       # Build JAR
