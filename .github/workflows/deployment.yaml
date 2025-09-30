@@ -47,9 +47,15 @@ jobs:
 
       # SonarQube Analysis (Maven)
       - name: SonarQube Scan (Maven)
-        run: mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
-             -Dsonar.projectKey=blogging-app \
-             -Dsonar.projectName=blogging-app
+  run: mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+       -Dsonar.projectKey=blogging-app \
+       -Dsonar.projectName=blogging-app \
+       -Dsonar.host.url=$SONAR_HOST_URL \
+       -Dsonar.login=$SONAR_TOKEN
+  env:
+    SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+    SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
         env:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
