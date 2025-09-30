@@ -16,7 +16,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           repository: swastik7777/FullStack-Blogging-App
-          token: ${{ secrets.GITHUB_TOKEN }}   # ✅ Correct place for token
+          token: ${{ secrets.MY_GIT_TOKEN }}   # ✅ Correct place for token
 
       # Setup JDK (adjust version if needed)
       - name: Set up JDK 17
